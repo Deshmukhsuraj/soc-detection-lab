@@ -1,0 +1,45 @@
+# ============================================================
+# Detection  : Encoded PowerShell Execution with Suspicious Flags
+# ATT&CK     : T1059.001 (PowerShell), T1027 (Obfuscated Files)
+# Data Source: Windows Security EventCode 4688, Sysmon EID 1, PS ScriptBlock 4104
+# False Pos  : Rare — legitimate tools occasionally use -enc, verify parent process
+# Severity   : CRITICAL if 3+ flags, HIGH if 2, MEDIUM if 1
+# Author     : YourName
+# Tested     : 2026-03-08 | Host: ABC | Result: 1 event, CRITICAL confirmed
+# Lab Note   : Flag stacking reduces false positives significantly
+#              NOT_TRANSLATED in user field = SID not resolved at log time (normal)
+#              behavior_classify macros require Splunk ES / ESCU app
+# ============================================================
+
+index="dabba_windows" (EventCode=4688 OR EventCode=1 OR EventCode=4104)
+| eval proc      = coalesce(CommandLine, Image, "unknown")
+| eval user      = coalesce(Account_Name, User, SubjectUserName, "unknown")
+| eval cmd_lower = lower(proc)
+| where match(cmd_lower, "(-enc|-encodedcommand|-ec\s)")
+      OR match(cmd_lower, "(iex|invoke-expression)")
+      OR match(cmd_lower, "(downloadstring|downloadfile|webclient)")
+      OR match(cmd_lower, "(-nop|-noprofile)")
+      OR match(cmd_lower, "(-w\s+hidden|-windowstyle\s+hidden)")
+| eval flags = mvappend(
+    if(match(cmd_lower, "(-enc|-encodedcommand)"),     "ENCODED",   null()),
+    if(match(cmd_lower, "(iex|invoke-expression)"),    "IEX",       null()),
+    if(match(cmd_lower, "(downloadstring|webclient)"), "DOWNLOAD",  null()),
+    if(match(cmd_lower, "(-nop|-noprofile)"),          "NOPROFILE", null()),
+    if(match(cmd_lower, "-w\s+hidden"),                "HIDDEN",    null())
+  )
+| eval flag_count = mvcount(flags)
+| eval severity = case(
+    flag_count >= 3, "CRITICAL",
+    flag_count == 2, "HIGH",
+    flag_count == 1, "MEDIUM",
+    true(),          "LOW"
+  )
+| `behavior_classify`
+| `execution_context_classify`
+| `behavior_route`
+| where severity != "LOW"
+| table _time, ComputerName, user, proc, flags, severity, mitre_techniques, tactics, technique, escu_detection
+| sort -severity, -_time
+```
+
+ Encoded PowerShell detection T1059.001 T1027 - tested 2026-03-08
