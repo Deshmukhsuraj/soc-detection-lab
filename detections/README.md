@@ -1,21 +1,34 @@
-# Detections
+# SOC Detection Lab
 
-ATT&CK-mapped SPL detections tested in a personal Splunk lab.
+> Personal blue team lab for building and testing ATT&CK-mapped detections.
 
-| File | Technique | Severity | Tested |
-|------|-----------|----------|--------|
-| T1059_recon_commands.spl | T1082, T1033, T1087 | Medium | 2026-03-08 |
-| T1053_005_scheduled_task.spl | T1053.005, T1036.004 | High | 2026-03-08 |
+## Stack
+| Component | Purpose |
+|-----------|---------|
+| Splunk | SIEM — SPL detection queries |
+| Sysmon + Windows EC2 | Endpoint telemetry |
+| Kali Linux | Attacker simulation |
+| Suricata (DMZ) | Network IDS / NDR |
+| AWS CloudTrail | Cloud control plane logs |
+| WireGuard VPN | Lab network segmentation |
+
+## Detections Built
+
+| # | File | ATT&CK Technique | Tactic | Severity | Date Tested |
+|---|------|-----------------|--------|----------|-------------|
+| 1 | [T1059_recon_commands.spl](detections/T1059_recon_commands.spl) | T1082, T1033, T1087 | Discovery | Medium | 2026-03-08 |
+| 2 | [T1053_005_scheduled_task.spl](detections/T1053_005_scheduled_task.spl) | T1053.005, T1036.004 | Persistence | High | 2026-03-08 |
+
+## Lab Progress
+- [x] Phase 0 — Lab setup (Splunk + Sysmon + Suricata + CloudTrail)
+- [x] Lab 1 — Recon command detection
+- [x] Lab 2 — Scheduled task persistence
+- [ ] Lab 3 — Encoded PowerShell
+- [ ] Lab 4 — Suricata port scan
+- [ ] Lab 5 — Beaconing detection
+- [ ] Lab 6 — AWS CloudTrail anomalies
 ```
 
-Scroll down → **"Commit new file"** → click the green button.
-
----
-
-## Step 4 — Add Your First Detection File
-
-Click **"Add file" → "Create new file"**
-
-In the filename box:
+Scroll down → commit message:
 ```
-detections/T1059_recon_commands.spl
+Add lab stack, detection index and progress tracker
