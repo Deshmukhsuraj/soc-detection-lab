@@ -1,0 +1,28 @@
+# ============================================================
+# Detection  : Suspicious Scheduled Task Creation with Masquerading
+# ATT&CK     : T1053.005 (Scheduled Task), T1036.004 (Masquerade Task Name)
+# Data Source: Windows Security EventCode 4698, Sysmon EID 1
+# False Pos  : Legitimate software installers — verify parent process
+# Severity   : High / Critical depending on payload
+# Author     : YourName
+# Tested     : 2026-03-08 | Host: ABC | Result: 1 event confirmed
+# Lab Note   : "WindowsUpdate" task name is a known attacker masquerade pattern
+#              Parent was cmd.exe (interactive) — real attacks use ps/wscript
+# ============================================================
+
+index="dabba_windows" (EventCode=4698 OR EventCode=1)
+| eval cmd  = coalesce(CommandLine, Task_Content, "unknown")
+| eval task = coalesce(Task_Name, "unknown")
+| eval user = coalesce(Account_Name, SubjectUserName, ParentUser, "unknown")
+| where match(cmd, "(?i)schtasks.*/create") OR EventCode=4698
+| eval suspicious = case(
+    match(cmd, "(?i)powershell|cmd\.exe|wscript|cscript|mshta|rundll32"), "HIGH",
+    match(task, "(?i)windowsupdate|svchost|microsoft|system"),            "MEDIUM - masquerade",
+    true(), "LOW")
+| table _time, ComputerName, task, cmd, user, suspicious, ParentCommandLine
+| sort -suspicious, -_time
+```
+
+Scroll down → commit message:
+```
+Add Lab 2: Scheduled task persistence T1053.005 T1036.004 - tested 2026-03-08
