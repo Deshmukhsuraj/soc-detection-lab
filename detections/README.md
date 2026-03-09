@@ -20,6 +20,7 @@
 | 2 | [T1053_005_scheduled_task.spl](detections/T1053_005_scheduled_task.spl) | T1053.005, T1036.004 | Persistence | High | 2026-03-08 |
 | 3 | [T1059_001_encoded_powershell.spl](detections/T1059_001_encoded_powershell.spl) | T1059.001, T1027 | Execution | Critical | 2026-03-08 |
 | 4 | [T1046_network_port_scan.spl](detections/T1046_network_port_scan.spl) | T1046 | Discovery | Critical | 2026-03-09 |
+| 5 | [T1071_c2_beaconing.spl](detections/T1071_c2_beaconing.spl) | T1071, T1071.001 | Command and Control | Critical | 2026-03-09 |
 
 ## Lab Progress
 - [x] Phase 0 — Lab setup (Splunk + Sysmon + Suricata + CloudTrail)
