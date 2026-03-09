@@ -21,6 +21,7 @@
 | 3 | [T1059_001_encoded_powershell.spl](detections/T1059_001_encoded_powershell.spl) | T1059.001, T1027 | Execution | Critical | 2026-03-08 |
 | 4 | [T1046_network_port_scan.spl](detections/T1046_network_port_scan.spl) | T1046 | Discovery | Critical | 2026-03-09 |
 | 5 | [T1071_c2_beaconing.spl](detections/T1071_c2_beaconing.spl) | T1071, T1071.001 | Command and Control | Critical | 2026-03-09 |
+| 6 | [T1078_004_aws_cloudtrail.spl](detections/T1078_004_aws_cloudtrail.spl) | T1078.004, T1098.001 | Persistence, Defense Evasion | Critical | 2026-03-09 |
 
 ## Lab Progress
 - [x] Phase 0 — Lab setup (Splunk + Sysmon + Suricata + CloudTrail)
