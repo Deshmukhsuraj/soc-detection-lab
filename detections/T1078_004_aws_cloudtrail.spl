@@ -1,0 +1,111 @@
+# ============================================================
+# Detection  : AWS CloudTrail — Identity Threat Detection Suite
+# ATT&CK     : T1078.004 (Cloud Accounts), T1098.001 (Additional Cloud Credentials)
+# Data Source: AWS CloudTrail — cloudtrail_events index
+# False Pos  : Dynamic ISP IPs for single-user accounts — whitelist known IP ranges
+# Severity   : See individual detection risk scoring below
+# Author     : YourName
+# Tested     : 2026-03-09 | Host: ABC
+# Findings   : Root account used from 5 IPs, 10 logins — violates AWS baseline
+#              IAM privilege escalation chain captured — CreateAccessKey + AttachPolicy + AddToGroup
+#              59.95.74.209 investigated — confirmed same ISP dynamic IP
+# Note       : Double ingestion observed in some fields — data quality issue to fix
+# ============================================================
+
+# ── DETECTION 1 — Root Account Usage ───────────────────────
+# Fires on any Root API call — should be zero in production
+# Tested: 14 events confirmed, all MEDIUM (MFA enabled, read only)
+
+index="cloudtrail_events" sourcetype="aws:cloudtrail"
+| spath input=_raw
+| where 'userIdentity.type'="Root"
+| eval mfa_used = spath(_raw, "userIdentity.sessionContext.attributes.mfaAuthenticated")
+| eval risk = case(
+    mfa_used="false" AND readOnly="false", "CRITICAL - Root no MFA write action",
+    mfa_used="false" AND readOnly="true",  "HIGH - Root no MFA read action",
+    mfa_used="true"  AND readOnly="false", "HIGH - Root with MFA write action",
+    mfa_used="true"  AND readOnly="true",  "MEDIUM - Root with MFA read only",
+    true(), "LOW"
+  )
+| eval user_agent_type = case(
+    match(userAgent, "(?i)console"),                       "AWS Console",
+    match(userAgent, "(?i)mozilla|chrome|safari"),         "Browser",
+    match(userAgent, "(?i)aws-cli|python|boto|terraform"), "Programmatic",
+    true(), "Unknown"
+  )
+| dedup _time, eventName, sourceIPAddress
+| table _time, eventName, eventSource, sourceIPAddress, awsRegion, mfa_used, user_agent_type, risk
+| sort -risk, -_time
+
+# ── DETECTION 2 — IAM Privilege Escalation Chain ───────────
+# Fires on dangerous IAM actions indicating privilege escalation
+# Tested: 3 events confirmed — CreateAccessKey(CRITICAL) + AttachUserPolicy(CRITICAL) + AddUserToGroup(HIGH)
+# Attack chain captured in 3 minutes: credential creation → policy attachment → group membership
+
+# index="cloudtrail_events" sourcetype="aws:cloudtrail"
+# | spath input=_raw
+# | eval user = coalesce('userIdentity.userName', 'userIdentity.type', "unknown")
+# | eval event = eventName
+# | eval src_ip = sourceIPAddress
+# | where event IN (
+#     "AttachUserPolicy",
+#     "AttachRolePolicy",
+#     "CreateAccessKey",
+#     "AddUserToGroup",
+#     "UpdateAssumeRolePolicy",
+#     "PutUserPolicy",
+#     "PutRolePolicy",
+#     "CreateLoginProfile",
+#     "UpdateLoginProfile",
+#     "SetDefaultPolicyVersion"
+#   )
+# | eval risk = case(
+#     event IN ("CreateAccessKey", "AttachUserPolicy", "PutUserPolicy"), "CRITICAL - credential or policy manipulation",
+#     event IN ("AddUserToGroup", "AttachRolePolicy", "PutRolePolicy"),  "HIGH - privilege escalation path",
+#     event IN ("UpdateAssumeRolePolicy", "SetDefaultPolicyVersion"),    "HIGH - trust policy modification",
+#     event IN ("CreateLoginProfile", "UpdateLoginProfile"),             "MEDIUM - console access modification",
+#     true(), "LOW"
+#   )
+# | dedup _time, event, user
+# | table _time, user, event, src_ip, awsRegion, risk
+# | sort -risk, -_time
+
+# ── DETECTION 3 — Console Login Anomaly + Multi-Source Alert ──
+# v1: Per-login risk scoring with geolocation
+# v2: Multi-source IP detection across same account
+# Tested: 5 IPs, 10 logins on Root — CRITICAL multi-source confirmed
+# Finding: 59.95.74.209 investigated — confirmed same ISP dynamic IP
+
+# index="cloudtrail_events" sourcetype="aws:cloudtrail"
+# | spath input=_raw
+# | where eventName="ConsoleLogin"
+# | eval user = coalesce('userIdentity.userName', 'userIdentity.type', "unknown")
+# | eval mfa_used = spath(_raw, "additionalEventData.MFAUsed")
+# | eval login_result = spath(_raw, "responseElements.ConsoleLogin")
+# | iplocation sourceIPAddress
+# | eval risk = case(
+#     login_result="Failure" AND mfa_used="No",  "CRITICAL - failed login no MFA",
+#     login_result="Failure" AND mfa_used="Yes", "HIGH - failed login with MFA",
+#     login_result="Success" AND mfa_used="No",  "HIGH - success no MFA",
+#     login_result="Success" AND mfa_used="Yes", "LOW - normal login",
+#     true(), "MEDIUM - unknown"
+#   )
+# | eval access_type = case(
+#     match('userIdentity.type', "Root"),    "ROOT LOGIN - always alert",
+#     match('userIdentity.type', "IAMUser"), "IAM User login",
+#     true(), "Other"
+#   )
+# | dedup _time, user, sourceIPAddress
+# | stats dc(sourceIPAddress) as unique_ips,
+#         values(sourceIPAddress) as ip_list,
+#         values(Country) as countries,
+#         count as total_logins
+#         by user
+# | eval multi_source_risk = case(
+#     unique_ips >= 3, "CRITICAL - 3+ source IPs same account",
+#     unique_ips == 2, "HIGH - 2 source IPs same account",
+#     true(), "NORMAL"
+#   )
+# | where multi_source_risk != "NORMAL"
+# | table user, unique_ips, ip_list, countries, total_logins, multi_source_risk
+# | sort -multi_source_risk
