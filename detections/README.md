@@ -30,8 +30,4 @@
 - [x] Lab 4 — Suricata port scan
 - [x] Lab 5 — Beaconing detection
 - [x] Lab 6 — AWS CloudTrail anomalies
-```
 
-Scroll down → commit message:
-```
-Add lab stack, detection index and progress tracker
