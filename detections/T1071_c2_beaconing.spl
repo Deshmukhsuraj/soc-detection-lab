@@ -1,0 +1,71 @@
+# ============================================================
+# Detection  : C2 Beaconing via Regular Interval Network Connections
+# ATT&CK     : T1071 (Application Layer Protocol), T1071.001 (Web Protocols)
+# Data Source: Suricata EVE JSON — flow events
+# False Pos  : NTP, telemetry agents, heartbeat services — whitelist by dest_ip
+# Severity   : beacon_score > 4 = CRITICAL, > 2 = HIGH, > 1 = MEDIUM
+# Author     : Deshmukh
+# Tested     : 2026-03-09 | Host: ABC | Result: 1 row confirmed
+#              stddev=0.70, beacon_score=4.65, 15 buckets, avg 3.73 conn/min
+# Gap Note   : v1 hardcoded IPs — missed all other hosts
+#              v2 removed IP filters, added RFC1918 traffic direction classifier
+# ============================================================
+
+# ── VERSION 1 — Targeted (known src/dest IPs) ──────────────
+# Use when: you already know the suspected beaconing pair
+# Limitation: misses beaconing from any other host
+
+# index="suricata" sourcetype="suricata"
+# src_ip="10.10.0.2" dest_ip="10.10.0.3" dest_port=80
+# | bucket _time span=1m
+# | stats count as connections by _time, src_ip, dest_ip, dest_port
+# | eventstats avg(connections)   as avg_conn,
+#              stdev(connections) as stddev_conn,
+#              count              as total_buckets
+#              by src_ip, dest_ip, dest_port
+# | eval is_beaconing = case(
+#     stddev_conn < 1.5 AND total_buckets >= 5, "YES - Regular interval",
+#     stddev_conn < 3.0 AND total_buckets >= 5, "POSSIBLE",
+#     true(), "NO"
+#   )
+# | eval beacon_score = round(avg_conn / (stddev_conn + 0.1), 2)
+# | where is_beaconing != "NO"
+# | dedup src_ip, dest_ip, dest_port
+# | table src_ip, dest_ip, dest_port, avg_conn, stddev_conn, total_buckets, beacon_score, is_beaconing
+# | sort -beacon_score
+
+# ── VERSION 2 — Network-Wide (no IP hardcoding) ────────────
+# Use when: hunting across all hosts for unknown beaconing
+# Covers  : any src/dest pair, classifies traffic direction automatically
+
+index="suricata" sourcetype="suricata" event_type="flow"
+| bucket _time span=1m
+| stats count as connections by _time, src_ip, dest_ip, dest_port
+| eventstats avg(connections)   as avg_conn,
+             stdev(connections) as stddev_conn,
+             count              as total_buckets
+             by src_ip, dest_ip, dest_port
+| eval is_beaconing = case(
+    stddev_conn < 1.5 AND total_buckets >= 5, "YES - Regular interval",
+    stddev_conn < 3.0 AND total_buckets >= 5, "POSSIBLE",
+    true(), "NO"
+  )
+| eval beacon_score = round(avg_conn / (stddev_conn + 0.1), 2)
+| where is_beaconing != "NO"
+| eval dest_is_internal = if(
+    match(dest_ip, "^10\.|^192\.168\.|^172\.(1[6-9]|2[0-9]|3[01])\."),
+    "YES", "NO"
+  )
+| eval src_is_internal = if(
+    match(src_ip, "^10\.|^192\.168\.|^172\.(1[6-9]|2[0-9]|3[01])\."),
+    "YES", "NO"
+  )
+| eval traffic_direction = case(
+    src_is_internal="YES" AND dest_is_internal="NO", "Internal → External C2 risk",
+    src_is_internal="YES" AND dest_is_internal="YES", "Internal → Internal lateral movement risk",
+    src_is_internal="NO"  AND dest_is_internal="YES", "External → Internal inbound risk",
+    true(), "Unknown"
+  )
+| dedup src_ip, dest_ip, dest_port
+| table src_ip, dest_ip, dest_port, avg_conn, stddev_conn, total_buckets, beacon_score, is_beaconing, traffic_direction
+| sort -beacon_score
