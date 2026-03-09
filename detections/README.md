@@ -26,10 +26,10 @@
 - [x] Phase 0 — Lab setup (Splunk + Sysmon + Suricata + CloudTrail)
 - [x] Lab 1 — Recon command detection
 - [x] Lab 2 — Scheduled task persistence
-- [ ] Lab 3 — Encoded PowerShell
-- [ ] Lab 4 — Suricata port scan
-- [ ] Lab 5 — Beaconing detection
-- [ ] Lab 6 — AWS CloudTrail anomalies
+- [x] Lab 3 — Encoded PowerShell
+- [x] Lab 4 — Suricata port scan
+- [x] Lab 5 — Beaconing detection
+- [x] Lab 6 — AWS CloudTrail anomalies
 ```
 
 Scroll down → commit message:
