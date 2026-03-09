@@ -1,0 +1,30 @@
+# ============================================================
+# Detection  : Network Port Scan Detection
+# ATT&CK     : T1046 (Network Service Discovery)
+# Data Source: Suricata EVE JSON — alert and flow events
+# False Pos  : Vulnerability scanners, authorized pen tests — whitelist by src_ip
+# Severity   : CRITICAL if 500+ ports, HIGH if 200+, MEDIUM if 100+
+# Author     : Deshmukh
+# Tested     : 2026-03-09 | Host: ABC | Result: 1 row, CRITICAL confirmed
+# Lab Note   : 4561 raw Suricata events compressed to 1 actionable row
+#              Kali (10.10.0.3) scanned 1000 ports on Windows victim (10.10.0.2)
+#              Suricata auto-flagged DB ports (MSSQL,MySQL,Oracle,Postgres) + VNC
+#              Attacker intent visible from signatures — hunting DBs + remote access
+# ============================================================
+
+index="suricata" sourcetype="suricata"
+| stats dc(dest_port) as unique_ports,
+        count as total_packets,
+        values(alert.signature) as signatures
+        by src_ip, dest_ip
+| where unique_ports > 10
+| eval severity = case(
+    unique_ports >= 500, "CRITICAL",
+    unique_ports >= 200, "HIGH",
+    unique_ports >= 100, "MEDIUM",
+    unique_ports >= 10,  "LOW - recon possible",
+    true(),              "NORMAL"
+  )
+| where severity != "NORMAL"
+| table src_ip, dest_ip, unique_ports, total_packets, signatures, severity
+| sort -unique_ports
